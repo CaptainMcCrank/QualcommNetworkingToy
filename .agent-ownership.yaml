@@ -8,12 +8,12 @@ artifacts:
   project.manifest.yaml:
     owner: "initialization-agent-v1.0"
     last_modified: "2026-05-06T22:56:17Z"
-    commit: null  # Updated after initial commit
+    commit: "2a6096c5876a6685f440a110d4c926e8a78e0c6b"
 
   .agent-ownership.yaml:
     owner: "initialization-agent-v1.0"
     last_modified: "2026-05-06T22:56:17Z"
-    commit: null
+    commit: "2a6096c5876a6685f440a110d4c926e8a78e0c6b"
 
   docs/prd.md:
     owner: null
@@ -23,12 +23,12 @@ artifacts:
   docs/agent-protocol.md:
     owner: "initialization-agent-v1.0"
     last_modified: "2026-05-06T22:56:17Z"
-    commit: null
+    commit: "2a6096c5876a6685f440a110d4c926e8a78e0c6b"
 
   docs/inputs/product_proposal.md:
     owner: "user"
     last_modified: "2026-05-06T22:56:17Z"
-    commit: null
+    commit: "2a6096c5876a6685f440a110d4c926e8a78e0c6b"
 
   ansible/:
     owner: null
