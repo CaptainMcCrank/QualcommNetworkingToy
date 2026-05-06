@@ -1,0 +1,27 @@
+# Common Failure Patterns
+#
+# This file documents known failure patterns and their resolutions.
+# Agents should consult this file when encountering errors and update it
+# when resolving novel issues.
+
+patterns: []
+  # Example entry (uncomment and modify when adding real patterns):
+  #
+  # - id: "redis-bind-address-001"
+  #   error_signature: |
+  #     TASK \[redis : Start Redis service\].*
+  #     fatal:.*Unable to start service redis-server
+  #   symptoms:
+  #     - "Redis service fails to start"
+  #     - "Connection refused on port 6379"
+  #   root_causes:
+  #     - cause: "Redis bound to localhost but connection attempted from different host"
+  #       likelihood: high
+  #       diagnostic_steps:
+  #         - "Check redis.conf for bind address"
+  #         - "Verify network connectivity between hosts"
+  #       fix: "Update redis.conf bind address or use redis_bind_address variable"
+  #   related_issues:
+  #     - 52
+  #   added_by: "ansible-agent-v2.1"
+  #   added_date: "2025-01-08T16:30:00Z"

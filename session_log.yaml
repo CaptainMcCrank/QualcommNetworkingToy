@@ -1,0 +1,89 @@
+---
+# Build Session Provenance Log Template
+#
+# This file records which prompts were used during a build session and what
+# outputs they produced. It enables cryptographic traceability from a deployed
+# build back to the exact prompts that created it.
+#
+# Location: .build-provenance/session_<uuid>.yaml
+# Created by: initialization-agent-v1.0
+# Updated by: Each agent during their phase
+# Finalized by: validation-agent-v1.0
+#
+# IMPORTANT: One session log file per build. Old sessions are archived after
+# 30 days (always keeping at least one).
+
+session:
+  id: "<UUIDv4 - generated at session start>"
+  started_at: "<ISO 8601 timestamp>"
+  completed_at: null  # Set when pipeline completes
+  status: "in_progress"  # in_progress | complete | failed | abandoned
+
+prompt_library:
+  # The prompt library repository and version used for this build
+  # Detected automatically from PROMPT_LIBRARY_PATH in .env
+  repository: "<URL of prompt library repo>"
+  commit: "<git commit hash of prompt library at session start>"
+  commit_short: "<short SHA>"
+  path: "<value of PROMPT_LIBRARY_PATH from .env>"
+
+# Record of each prompt invocation during the build
+# Agents append their entry when they complete their phase
+prompts_used:
+  # Example entry format - each agent appends one entry
+  #
+  # - phase: "initialization"
+  #   agent_id: "initialization-agent-v1.0"
+  #   prompt_file: "Standards/Agents/00_Initialization_Agent.md"
+  #   prompt_hash: "<SHA256 of prompt file content at invocation>"
+  #   invoked_at: "<ISO 8601>"
+  #   completed_at: "<ISO 8601>"
+  #   user_interactions: 0  # Number of user Q&A exchanges (if applicable)
+  #   outputs:
+  #     - artifact: "project.manifest.yaml"
+  #       artifact_hash: "<SHA256 of artifact content>"
+  #       commit: "<git commit SHA that created this artifact>"
+  #   session_summary: |
+  #     Brief description of what this agent accomplished.
+  #   errors_encountered: []  # List of errors if any
+
+# Cryptographic attestation for build verification
+# Completed by validation-agent-v1.0 at pipeline end
+cryptographic_attestation:
+  # Components of the attestation
+  prompt_library_commit: "<commit hash of prompt library>"
+  project_final_commit: null  # Set when pipeline completes
+  session_id: "<same as session.id above>"
+
+  # Combined attestation hash
+  # Computed as: SHA256(prompt_library_commit || project_final_commit || session_id)
+  # This hash uniquely identifies the prompt→build relationship
+  attestation_hash: null  # Computed at session completion
+
+  # GPG signature (REQUIRED)
+  # Builds fail without valid signature
+  signature: null  # ASCII-armored GPG signature
+  signer_key_id: null  # GPG key ID used for signing
+  signed_at: null  # ISO 8601 timestamp of signing
+
+# Verification instructions embedded in the log
+verification:
+  description: |
+    To verify this build's provenance:
+    1. Clone the prompt library at the commit specified above
+    2. Clone this project at project_final_commit
+    3. Compute the attestation hash and compare
+    4. Verify the GPG signature
+
+  commands:
+    compute_attestation: |
+      echo -n "<prompt_library_commit><project_final_commit><session_id>" | sha256sum | cut -d' ' -f1
+
+    verify_prompt_hash: |
+      sha256sum <prompt_library_path>/<prompt_file> | cut -d' ' -f1
+
+    verify_signature: |
+      gpg --verify <signature_file>
+
+    get_prompt_at_commit: |
+      git -C <prompt_library_path> show <commit>:<prompt_file>

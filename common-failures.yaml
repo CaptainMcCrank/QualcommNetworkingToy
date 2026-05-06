@@ -1,0 +1,159 @@
+# Troubleshooting Knowledge Base Template
+# Location: .troubleshooting/common-failures.yaml
+#
+# This file captures error patterns and resolutions
+# for future agents to consult during troubleshooting.
+
+---
+version: "1.0"
+last_updated: "<ISO 8601 timestamp>"
+
+# Error pattern definitions
+error_patterns:
+
+  # Network Errors
+  - id: NET-001
+    category: network
+    signature: "Connection refused"
+    indicators:
+      - "Connection refused"
+      - "ECONNREFUSED"
+    likely_causes:
+      - "Service not running"
+      - "Firewall blocking port"
+      - "Wrong port number"
+    diagnostic_steps:
+      - "Check if service is running: systemctl status <service>"
+      - "Check if port is listening: ss -tlnp | grep <port>"
+      - "Check firewall rules: iptables -L -n"
+    solutions:
+      - "Start the service: systemctl start <service>"
+      - "Open firewall port: iptables -I INPUT -p tcp --dport <port> -j ACCEPT"
+    related_issues: []
+
+  - id: NET-002
+    category: network
+    signature: "Name or service not known"
+    indicators:
+      - "Name or service not known"
+      - "Temporary failure in name resolution"
+      - "Could not resolve host"
+    likely_causes:
+      - "DNS not configured"
+      - "No internet connectivity"
+      - "DNS server down"
+    diagnostic_steps:
+      - "Check DNS config: cat /etc/resolv.conf"
+      - "Test DNS: nslookup google.com"
+      - "Test connectivity: ping 8.8.8.8"
+    solutions:
+      - "Add DNS server: echo 'nameserver 8.8.8.8' >> /etc/resolv.conf"
+      - "Restart networking: systemctl restart networking"
+    related_issues: []
+
+  # Permission Errors
+  - id: PERM-001
+    category: permission
+    signature: "Permission denied"
+    indicators:
+      - "Permission denied"
+      - "Operation not permitted"
+    likely_causes:
+      - "File owned by root"
+      - "Incorrect file permissions"
+      - "SELinux/AppArmor blocking"
+    diagnostic_steps:
+      - "Check ownership: ls -la <path>"
+      - "Check current user: whoami"
+      - "Check sudo access: sudo -l"
+    solutions:
+      - "Change ownership: sudo chown <user>:<group> <path>"
+      - "Fix permissions: sudo chmod <mode> <path>"
+      - "Use sudo for the operation"
+    related_issues: []
+
+  # Dependency Errors
+  - id: DEP-001
+    category: dependency
+    signature: "ModuleNotFoundError"
+    indicators:
+      - "ModuleNotFoundError"
+      - "ImportError"
+      - "No module named"
+    likely_causes:
+      - "Package not installed"
+      - "Wrong Python environment"
+      - "Virtual environment not activated"
+    diagnostic_steps:
+      - "List installed packages: pip list"
+      - "Check Python path: which python3"
+      - "Check if in venv: echo $VIRTUAL_ENV"
+    solutions:
+      - "Install package: pip install <package>"
+      - "Activate venv: source venv/bin/activate"
+    related_issues: []
+
+  # Resource Errors
+  - id: RES-001
+    category: resource
+    signature: "No space left on device"
+    indicators:
+      - "No space left on device"
+      - "ENOSPC"
+    likely_causes:
+      - "Disk full"
+      - "Log files too large"
+      - "tmp directory full"
+    diagnostic_steps:
+      - "Check disk space: df -h"
+      - "Find large files: du -sh /* | sort -h"
+      - "Check log size: du -sh /var/log"
+    solutions:
+      - "Clear old logs: journalctl --vacuum-time=7d"
+      - "Remove unused packages: apt autoremove"
+      - "Clear apt cache: apt clean"
+    related_issues: []
+
+  # Architecture Errors
+  - id: ARCH-001
+    category: architecture
+    signature: "wrong ELF class"
+    indicators:
+      - "wrong ELF class"
+      - "Exec format error"
+      - "cannot execute binary file"
+    likely_causes:
+      - "32-bit binary on 64-bit system (or vice versa)"
+      - "ARM binary on x86 (or vice versa)"
+      - "32-bit userland on 64-bit kernel"
+    diagnostic_steps:
+      - "Check system arch: uname -m"
+      - "Check binary arch: file <binary>"
+      - "Check dpkg arch: dpkg --print-architecture"
+      - "Check userland bits: getconf LONG_BIT"
+    solutions:
+      - "Install correct architecture version"
+      - "Use multiarch: dpkg --add-architecture <arch>"
+      - "Compile from source for correct architecture"
+    related_issues: []
+
+# Category metadata
+categories:
+  network:
+    description: "Network connectivity and DNS issues"
+    first_check: "ping and ss commands"
+  permission:
+    description: "File and process permission issues"
+    first_check: "ls -la and whoami"
+  dependency:
+    description: "Package and module issues"
+    first_check: "pip list and which python"
+  resource:
+    description: "Disk, memory, and CPU issues"
+    first_check: "df -h and free -h"
+  configuration:
+    description: "Config file syntax and value issues"
+    first_check: "syntax check commands"
+  architecture:
+    description: "CPU architecture and binary compatibility"
+    first_check: "uname -m and file commands"

@@ -1,0 +1,50 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.sublime-*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+npm-debug.log
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Build artifacts (tracked separately)
+*.iso
+*.img
+*.tar.gz
+
+# Secrets (never commit)
+*.pem
+*.key
+.env
+.env.*
+secrets.yaml
+vault.yaml
+
+# Added by init-project.sh
+LLM_Pre-prompts/
+LLM\ Pre-prompts
+SandboxedClaudeCode/

@@ -1,0 +1,197 @@
+# Rollback Decision Matrix
+# Used by Agent 06B (Deployment & Troubleshooting) to determine appropriate rollback level
+# Copy to project root and customize thresholds as needed
+
+---
+version: "1.0"
+agent: "deployment-troubleshooting-agent-v1.0"
+
+# Rollback trigger definitions
+rollback_levels:
+
+  level_1_task:
+    name: "Task-Level Rollback"
+    description: "Single task failed, minimal impact"
+    risk: "Low"
+    typical_downtime: "< 1 minute"
+
+    criteria:
+      - "Single configuration file corrupted or invalid"
+      - "Service config change did not apply correctly"
+      - "File permission set incorrectly"
+      - "Template rendering produced invalid output"
+      - "Package installation failed but system stable"
+
+    indicators:
+      - error_messages:
+          - "invalid configuration"
+          - "permission denied"
+          - "template error"
+          - "syntax error in"
+      - service_state: "running"  # Other services still running
+      - ssh_accessible: true
+      - filesystem_healthy: true
+
+    actions:
+      primary: "Restore from Ansible backup file"
+      fallback: "Restore from checkpoint"
+
+    commands:
+      restore_config: |
+        # Restore config from Ansible backup
+        - name: Restore config from backup
+          copy:
+            src: "{{ backup_file }}"
+            dest: "{{ original_path }}"
+            remote_src: yes
+
+      verify: |
+        # Verify restoration
+        ansible-playbook tests/smoke_test.yml --limit {{ target_host }}
+
+  level_2_checkpoint:
+    name: "Checkpoint Rollback"
+    description: "Multi-task failure, service disruption"
+    risk: "Medium"
+    typical_downtime: "5-15 minutes"
+
+    criteria:
+      - "Service won't start after configuration changes"
+      - "Multiple dependent services affected"
+      - "Several configuration files corrupted"
+      - "Package conflicts introduced"
+      - "Partial deployment left system in inconsistent state"
+
+    indicators:
+      - error_messages:
+          - "failed to start"
+          - "dependency failed"
+          - "broken packages"
+          - "conflict"
+      - service_state: "failed"
+      - ssh_accessible: true
+      - filesystem_healthy: true
+
+    actions:
+      primary: "Restore from deployment checkpoint"
+      fallback: "Full playbook re-run with --start-at-task"
+
+    commands:
+      restore_checkpoint: |
+        ansible-playbook -i {{ inventory }} playbooks/rollback.yml \
+            -e "rollback_timestamp={{ checkpoint_timestamp }}" \
+            -e "rollback_to_checkpoint=true"
+
+      replay_from_checkpoint: |
+        ansible-playbook -i {{ inventory }} playbooks/site.yml \
+            --start-at-task="{{ last_successful_task }}" \
+            -e "resume_from_checkpoint=true"
+
+      verify: |
+        ansible-playbook tests/smoke_test.yml --limit {{ target_host }}
+        ansible-playbook tests/integration_test.yml --limit {{ target_host }}
+
+  level_3_system:
+    name: "Full System Restore"
+    description: "System unresponsive or cascading failures"
+    risk: "High"
+    typical_downtime: "30+ minutes"
+
+    criteria:
+      - "System unresponsive via SSH"
+      - "Cascading service failures"
+      - "Filesystem corruption detected"
+      - "Boot failures after reboot"
+      - "Kernel panic or system instability"
+
+    indicators:
+      - ssh_accessible: false
+      - multiple_services_failed: true
+      - filesystem_errors: true
+      - kernel_errors: true
+
+    actions:
+      primary: "Flash new image and re-deploy"
+      fallback: "Boot from backup SD card (if available)"
+
+    requires_human: true
+
+    user_prompt: |
+      ## System Restore Required
+
+      The deployment has failed to a degree requiring system restoration.
+
+      **Symptoms:**
+      - {{ observed_symptoms | join('\n- ') }}
+
+      **Recovery options:**
+      1. Flash a new OS image to the SD card
+      2. Restore from system backup (if available)
+      3. Boot from backup SD card (if available)
+
+      **Recommended:** Flash new image for cleanest recovery.
+
+      After restoration, run full deployment:
+      ```bash
+      ansible-playbook -i {{ inventory }} playbooks/site.yml
+      ```
+
+# Decision flow
+decision_flow:
+  step_1:
+    check: "Is SSH accessible?"
+    if_no: "level_3_system"
+    if_yes: "step_2"
+
+  step_2:
+    check: "Are multiple services failed?"
+    if_yes: "step_3"
+    if_no: "step_4"
+
+  step_3:
+    check: "Is filesystem healthy?"
+    if_no: "level_3_system"
+    if_yes: "level_2_checkpoint"
+
+  step_4:
+    check: "Is only a single component affected?"
+    if_yes: "level_1_task"
+    if_no: "level_2_checkpoint"
+
+# Health check commands
+health_checks:
+  ssh_accessible:
+    command: "ssh -o ConnectTimeout=5 {{ user }}@{{ host }} 'echo ok'"
+    success_pattern: "ok"
+
+  filesystem_healthy:
+    command: "df -h / && touch /tmp/.health_check && rm /tmp/.health_check"
+    success_exit_code: 0
+
+  services_status:
+    command: "systemctl list-units --state=failed --no-pager"
+    parse: "count lines after header"
+
+# Checkpoint configuration
+checkpoints:
+  enabled: true
+  file: ".deployment_checkpoint.yaml"
+  retention_count: 5  # Keep last 5 checkpoints
+
+  structure:
+    session_id: "string"
+    created_at: "ISO 8601"
+    playbook: "path"
+    inventory: "path"
+    last_successful_task: "string"
+    task_index: "integer"
+    target_hosts: ["list"]
+    variables_snapshot: "object"
+
+# Post-rollback actions
+post_rollback:
+  - "Verify system returns to working state"
+  - "Run smoke tests"
+  - "Document what was rolled back and why"
+  - "File GitHub issue with 'rollback-executed' label"
+  - "Update project.manifest.yaml health status"

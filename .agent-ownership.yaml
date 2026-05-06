@@ -1,0 +1,41 @@
+# Agent Ownership Mapping
+#
+# This file tracks which agent is responsible for which artifacts.
+# Update this file whenever you create or significantly modify an artifact.
+
+---
+artifacts:
+  project.manifest.yaml:
+    owner: "initialization-agent-v1.0"
+    last_modified: "2026-05-06T22:56:17Z"
+    commit: null  # Updated after initial commit
+
+  .agent-ownership.yaml:
+    owner: "initialization-agent-v1.0"
+    last_modified: "2026-05-06T22:56:17Z"
+    commit: null
+
+  docs/prd.md:
+    owner: null
+    last_modified: null
+    commit: null
+
+  docs/agent-protocol.md:
+    owner: "initialization-agent-v1.0"
+    last_modified: "2026-05-06T22:56:17Z"
+    commit: null
+
+  docs/inputs/product_proposal.md:
+    owner: "user"
+    last_modified: "2026-05-06T22:56:17Z"
+    commit: null
+
+  ansible/:
+    owner: null
+    last_modified: null
+    commit: null
+
+  tests/:
+    owner: null
+    last_modified: null
+    commit: null

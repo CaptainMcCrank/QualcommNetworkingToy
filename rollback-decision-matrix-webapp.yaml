@@ -1,0 +1,210 @@
+# Rollback Decision Matrix — WebApp / Service
+#
+# WebApp counterpart to rollback-decision-matrix.yaml (which targets IoT / Pi devices).
+# Used by Agent 06B_WebDev_Deployment_Troubleshooting to determine appropriate
+# rollback level. Copy to project root and customize thresholds as needed.
+
+---
+version: "1.0"
+agent: "webdev-deployment-troubleshooting-agent-v1.0"
+
+# Rollback trigger definitions
+rollback_levels:
+
+  level_1_platform_revert:
+    name: "Platform-Native Revert"
+    description: "Bad deploy with no schema change; previous deployment is intact and re-promotable"
+    risk: "Low"
+    typical_downtime: "< 1 minute (most platforms swap atomically)"
+
+    criteria:
+      - "Healthcheck reports unexpected SHA after deploy"
+      - "5xx error rate > 1% sustained for 60s after deploy"
+      - "Critical user journey from test catalog fails post-deploy"
+      - "Bug introduced has no migration / data side effects"
+      - "Previous deployment is in the platform's deployment history"
+
+    indicators:
+      error_messages:
+        - "Internal Server Error"
+        - "Function execution timed out"
+        - "deployment failed"
+      runtime_state: "running but wrong version"
+      platform_deployment_history: "previous deploy ID available"
+
+    actions:
+      primary: "Platform-native revert to previous deployment ID"
+      fallback: "Image-tag rollback (Level 2) if platform revert fails"
+
+    commands:
+      vercel: |
+        vercel rollback {{ previous_deployment_id }}
+
+      netlify: |
+        netlify api restoreSiteDeploy --data='{"site_id":"{{ site_id }}","deploy_id":"{{ previous_deployment_id }}"}'
+
+      cloudflare_workers: |
+        wrangler rollback
+
+      flyio: |
+        flyctl deploy --image registry.fly.io/{{ app }}:{{ previous_sha }}
+
+      verify: |
+        # /healthz must report the rolled-back SHA
+        curl -fsS "{{ live_url }}/healthz" | jq -e --arg sha "{{ previous_sha }}" '.version | startswith($sha)'
+        # Smoke tests pass against the production URL
+        BASE_URL="{{ live_url }}" bash tests/smoke/*.sh
+
+  level_2_image_or_rollout:
+    name: "Image-Tag / Rollout Rollback"
+    description: "Self-hosted compose, k8s, or platform without native revert; multi-component issue"
+    risk: "Medium"
+    typical_downtime: "1–5 minutes"
+
+    criteria:
+      - "Self-hosted Docker Compose target (no platform revert API)"
+      - "Kubernetes deployment with rollout history"
+      - "Platform revert was attempted but did not propagate"
+      - "Frontend and backend out of sync after partial deploy"
+      - "Cache invalidation needed alongside the rollback"
+
+    indicators:
+      error_messages:
+        - "Image pull backoff"
+        - "CrashLoopBackOff"
+        - "service unhealthy"
+      runtime_state: "service degraded"
+      platform_supports_native_revert: false
+
+    actions:
+      primary: "Roll forward to previous image tag"
+      fallback: "Manual rebuild from previous git tag if image is missing"
+
+    commands:
+      compose: |
+        # Self-hosted docker-compose
+        PREV_SHA="{{ previous_sha }}"
+        IMAGE_TAG="$PREV_SHA" docker compose -f docker-compose.prod.yml up -d
+        # Wait for healthchecks
+        for i in $(seq 1 30); do
+          curl -fsS http://localhost:8000/healthz && break
+          sleep 2
+        done
+
+      k8s: |
+        kubectl rollout undo deployment/{{ deployment_name }}
+        kubectl rollout status deployment/{{ deployment_name }} --timeout=2m
+
+      cdn_purge: |
+        # If the rollback served different cacheable assets, purge the edge
+        case "{{ hosting_target }}" in
+          cloudflare) wrangler kv:key delete --binding=PURGE 2>/dev/null || npx cloudflare-pages-cache-purge ;;
+          vercel)     vercel revalidate --path "/" ;;
+          netlify)    netlify deploy --prod --restore ;;
+        esac
+
+      verify: |
+        curl -fsS "{{ live_url }}/healthz" | jq -e --arg sha "{{ previous_sha }}" '.version | startswith($sha)'
+        BASE_URL="{{ live_url }}" bash tests/smoke/*.sh
+
+  level_3_data_or_schema:
+    name: "Data / Schema Rollback"
+    description: "Bad migration applied or data corrupted; rollback would lose post-deploy writes"
+    risk: "High"
+    typical_downtime: "30+ minutes; potential data loss"
+
+    criteria:
+      - "Migration ran and dropped/altered a column"
+      - "Migration ran and renamed a table; new code expects new name"
+      - "Forward-fix is not safe (irreversible data corruption)"
+      - "Restoring DB backup means losing user-created data after that point"
+      - "Schema-aware client deployed against unmigrated DB"
+
+    indicators:
+      error_messages:
+        - "relation does not exist"
+        - "column \"...\" does not exist"
+        - "cannot drop column referenced by"
+        - "data integrity violated"
+      data_corruption_signs: true
+      backup_available: true | false
+
+    requires_human: true
+
+    user_prompt: |
+      ## Rollback Level 3 Required
+
+      Bad release applied migration `{{ migration_name }}` which: {{ description }}.
+
+      **Options:**
+      1. **Restore DB from backup** at {{ last_safe_backup_timestamp }}. Data after that point is **lost**.
+      2. **Forward-fix:** write a corrective migration that repairs the rows; keep the new schema. Lower data loss, more development time.
+      3. **Toggle a feature flag off** and leave the schema; address the data later. Lowest immediate impact, technical debt.
+
+      Each option has different downtime and data-loss profiles. I am not proceeding without your decision.
+
+      *webdev-deployment-troubleshooting-agent-v1.0*
+
+# Decision flow
+decision_flow:
+  step_1:
+    check: "Did the bad release apply a migration with irreversible side effects?"
+    if_yes: "level_3_data_or_schema"
+    if_no: "step_2"
+
+  step_2:
+    check: "Does the hosting platform support native deployment revert?"
+    if_yes: "step_3"
+    if_no: "level_2_image_or_rollout"
+
+  step_3:
+    check: "Is the previous deployment ID available and known-good?"
+    if_yes: "level_1_platform_revert"
+    if_no: "level_2_image_or_rollout"
+
+# Health-check commands
+health_checks:
+  healthcheck_endpoint:
+    command: "curl -fsS {{ live_url }}/healthz"
+    success_exit_code: 0
+
+  healthcheck_sha_match:
+    command: "curl -fsS {{ live_url }}/healthz | jq -e --arg sha \"{{ expected_sha }}\" '.version | startswith($sha)'"
+    success_exit_code: 0
+
+  smoke_tests:
+    command: "BASE_URL={{ live_url }} bash tests/smoke/*.sh"
+    success_exit_code: 0
+
+  error_rate_sample:
+    command: |
+      ERR=0
+      for i in $(seq 1 20); do
+        code=$(curl -sS -o /dev/null -w "%{http_code}" "{{ live_url }}/healthz")
+        [[ "${code:0:1}" != "2" ]] && ((ERR++))
+      done
+      [[ $ERR -le 1 ]]
+    success_exit_code: 0  # tolerates ~5% in 20 samples
+
+# Forward-fix protocol (alternative to rolling back)
+forward_fix:
+  preconditions:
+    - "Failure cause is identified and a code fix exists"
+    - "No data corruption from the partial deploy"
+    - "Fix is small and reversible"
+  steps:
+    - "Open a fix branch from the failing commit"
+    - "Apply the minimum change needed"
+    - "Run the test catalog locally"
+    - "Open a fast-track PR; trigger CI"
+    - "When CI is green, trigger the deploy workflow"
+    - "Re-run the 10-step diagnostic sequence to confirm restored"
+
+# Post-rollback actions
+post_rollback:
+  - "Verify /healthz reports the rolled-back SHA"
+  - "Run smoke tests against the rolled-back URL"
+  - "Compare the previous deployment's behavior to the failed one (was anything missed?)"
+  - "Document the incident in .AgentLessonsLearned/"
+  - "File a GitHub issue with 'rollback-executed' label, linked to the failing deploy run"
+  - "Update project.manifest.yaml health status and last_known_good_sha"

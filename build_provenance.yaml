@@ -1,0 +1,65 @@
+---
+# Build Provenance - Device Deployment Record
+#
+# This file is deployed to target devices at: /etc/build_provenance.yaml
+# It enables tracing a deployed device back to the exact prompts and commits
+# that produced its configuration.
+#
+# Template location: Standards/Templates/build_provenance.yaml
+# Deployed by: ansible-agent-v1.0 or validation-agent-v1.0
+
+build:
+  project_name: "{{ project_name }}"
+  project_version: "{{ project_version }}"
+  project_uuid: "{{ project_uuid }}"
+  project_commit: "{{ lookup('pipe', 'git rev-parse HEAD') }}"
+  project_commit_short: "{{ lookup('pipe', 'git rev-parse --short HEAD') }}"
+  built_at: "{{ ansible_date_time.iso8601 }}"
+
+prompt_library:
+  # The prompt library used to generate the agents that built this device
+  repository: "{{ prompt_library_repository }}"
+  commit: "{{ prompt_library_commit }}"
+  commit_short: "{{ prompt_library_commit_short }}"
+
+attestation:
+  # Cryptographic proof linking this build to its prompts
+  session_id: "{{ build_session_id }}"
+  attestation_hash: "{{ attestation_hash }}"
+
+  # Verification instructions
+  verify_command: |
+    # To verify this build's provenance:
+    echo -n "{{ prompt_library_commit }}{{ project_commit }}{{ build_session_id }}" | sha256sum
+    # Should output: {{ attestation_hash }}
+
+deployment:
+  deployed_at: "{{ ansible_date_time.iso8601 }}"
+  deployed_by: "{{ deploying_agent_id }}"
+  target_hostname: "{{ inventory_hostname }}"
+  target_model: "{{ ansible_board_name | default('Unknown') }}"
+  target_architecture: "{{ ansible_architecture }}"
+
+github:
+  # Standard GitHub references for issue tracking and automation
+  repository_url: "{{ github_repository_url }}"
+  issues_url: "{{ github_issues_url }}"
+  api_base: "{{ github_api_base }}"
+
+  # Optional: Live deployment URL
+  live_url: "{{ live_url | default(None) }}"
+
+agents_involved:
+  # List of agents that contributed to this build
+  # Populated from session_log.yaml
+{% for agent in agents_used %}
+  - id: "{{ agent.agent_id }}"
+    phase: "{{ agent.phase }}"
+    prompt_hash: "{{ agent.prompt_hash }}"
+{% endfor %}
+
+# Machine-readable metadata for automated tools
+metadata:
+  schema_version: "1.0"
+  generated_by: "ansible-agent-v1.0"
+  generated_at: "{{ ansible_date_time.iso8601 }}"

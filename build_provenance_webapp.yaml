@@ -1,0 +1,103 @@
+---
+# Build Provenance — WebApp / Service Deployment Record
+#
+# WebApp counterpart to build_provenance.yaml (which targets IoT / Pi devices).
+# This file is emitted by the WebDev Build Agent and consumed by the WebDev
+# Validation Agent. It typically lives at:
+#   - inside the production container image as /app/build_provenance.yaml
+#   - returned by GET /api/build-provenance (optional)
+#   - referenced by the /healthz endpoint (which embeds a subset)
+#
+# Template location: Standards/Templates/build_provenance_webapp.yaml
+# Deployed by: webdev-build-agent-v1.0
+# Consumed by: webdev-validation-agent-v1.0, webdev-deployment-troubleshooting-agent-v1.0
+
+build:
+  project_name: "{{ project_name }}"
+  project_version: "{{ project_version }}"
+  project_uuid: "{{ project_uuid }}"
+  project_commit: "{{ env('GITHUB_SHA') | default(lookup('pipe', 'git rev-parse HEAD')) }}"
+  project_commit_short: "{{ env('GITHUB_SHA_SHORT') | default(lookup('pipe', 'git rev-parse --short HEAD')) }}"
+  built_at: "{{ env('BUILD_DATE') | default(now(utc=true).isoformat()) }}"
+  built_by: "{{ env('GITHUB_ACTOR') | default('local-build') }}"
+  ci_run: "{{ env('GITHUB_RUN_ID') | default(None) }}"
+  ci_workflow: "{{ env('GITHUB_WORKFLOW') | default(None) }}"
+
+prompt_library:
+  repository: "{{ prompt_library_repository }}"
+  commit: "{{ prompt_library_commit }}"
+  commit_short: "{{ prompt_library_commit_short }}"
+
+attestation:
+  session_id: "{{ build_session_id }}"
+  attestation_hash: "{{ attestation_hash }}"
+  verify_command: |
+    # To verify this build's provenance:
+    echo -n "{{ prompt_library_commit }}{{ project_commit }}{{ build_session_id }}" | sha256sum
+    # Should output: {{ attestation_hash }}
+
+# WebApp-specific fields (replace IoT inventory_hostname / target_model)
+deployment:
+  hosting_target: "{{ hosting_target }}"        # vercel | netlify | cloudflare | flyio | render | railway | k8s | self-hosted
+  environment: "{{ environment | default('production') }}"  # production | staging | preview
+  deployed_at: "{{ now(utc=true).isoformat() }}"
+  deployed_by: "{{ deploying_agent_id }}"
+  platform_deployment_id: "{{ platform_deployment_id | default(None) }}"  # Vercel/Netlify/etc. internal ID
+  region: "{{ region | default(None) }}"
+  url: "{{ live_url | default(None) }}"
+  preview_url_pattern: "{{ preview_url_pattern | default(None) }}"
+
+runtime:
+  # Frontend
+  frontend:
+    framework: "{{ frontend_framework | default(None) }}"   # react | vue | svelte | astro | none
+    build_tool: "{{ frontend_build_tool | default(None) }}" # vite | webpack | esbuild | next | none
+    bundle_sha: "{{ frontend_bundle_sha | default(None) }}" # hash of dist/ output for cache busting
+    base_url: "{{ frontend_base_url | default(None) }}"
+  # Backend
+  backend:
+    runtime: "{{ backend_runtime }}"             # python:3.11.8 | node:20.11.1 | etc.
+    framework: "{{ backend_framework }}"         # flask | fastapi | django | express | hono | etc.
+    image_digest: "{{ backend_image_digest | default(None) }}"  # sha256:... for the deployed image
+
+# Image registry (when the deployment uses container images)
+images:
+  frontend: "{{ frontend_image | default(None) }}"   # ghcr.io/owner/repo/frontend:<sha>
+  backend:  "{{ backend_image  | default(None) }}"   # ghcr.io/owner/repo/backend:<sha>
+
+github:
+  repository_url: "{{ github_repository_url }}"
+  issues_url: "{{ github_issues_url }}"
+  api_base: "{{ github_api_base }}"
+  live_url: "{{ live_url | default(None) }}"
+
+agents_involved:
+  # List of agents that contributed to this build
+  # Populated from .build-provenance/session_<uuid>.yaml
+{% for agent in agents_used %}
+  - id: "{{ agent.agent_id }}"
+    phase: "{{ agent.phase }}"
+    prompt_hash: "{{ agent.prompt_hash }}"
+{% endfor %}
+
+# Healthcheck contract — what /healthz returns at runtime
+# (subset of this file; sufficient for the Validation Agent's SHA verification)
+healthcheck_contract:
+  endpoint: "/healthz"
+  expected_keys:
+    - status        # "ok" when healthy
+    - version       # MUST equal build.project_commit; used by Validation Agent
+    - runtime       # "python:3.11.8" or "node:20.11.1"
+    - environment   # production | staging | preview
+  example_response: |
+    {
+      "status": "ok",
+      "version": "{{ project_commit_short }}",
+      "runtime": "{{ backend_runtime }}",
+      "environment": "{{ environment | default('production') }}"
+    }
+
+metadata:
+  schema_version: "1.0"
+  generated_by: "webdev-build-agent-v1.0"
+  generated_at: "{{ now(utc=true).isoformat() }}"
