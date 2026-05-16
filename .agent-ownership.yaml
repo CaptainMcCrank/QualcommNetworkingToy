@@ -16,8 +16,23 @@ artifacts:
     commit: "2a6096c5876a6685f440a110d4c926e8a78e0c6b"
 
   docs/prd.md:
-    owner: null
-    last_modified: null
+    owner: "prd-agent-v1.0"
+    last_modified: "2026-05-11T00:00:00Z"
+    commit: null
+
+  docs/feature_list.md:
+    owner: "prd-agent-v1.0"
+    last_modified: "2026-05-11T00:00:00Z"
+    commit: null
+
+  .agent-context/prd-agent-v1.0-extraction-map.md:
+    owner: "prd-agent-v1.0"
+    last_modified: "2026-05-11T00:00:00Z"
+    commit: null
+
+  .agent-context/prd-agent-v1.0-reasoning.md:
+    owner: "prd-agent-v1.0"
+    last_modified: "2026-05-11T00:00:00Z"
     commit: null
 
   docs/agent-protocol.md:
