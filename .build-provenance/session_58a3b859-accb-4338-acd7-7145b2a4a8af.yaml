@@ -51,17 +51,17 @@ prompts_used:
     user_interactions: 4
     outputs:
       - artifact: "docs/prd.md"
-        artifact_hash: null
-        commit: null
+        artifact_hash: "sha256:fc1a5a64d947b80b02be5b79f4b169093609ca9c3845b6cf44b318c951558642"
+        commit: "1ccf45c"
       - artifact: "docs/feature_list.md"
-        artifact_hash: null
-        commit: null
+        artifact_hash: "sha256:74a290ba01b82c5e25c1ad15429a7915c7f19ca043aad56251e807b5ee5f4d03"
+        commit: "1ccf45c"
       - artifact: ".agent-context/prd-agent-v1.0-extraction-map.md"
         artifact_hash: null
-        commit: null
+        commit: "1ccf45c"
       - artifact: "DECISIONS.md"
         artifact_hash: null
-        commit: null
+        commit: "1ccf45c"
     session_summary: |
       Created PRD with 25 functional requirements (11 Must, 10 Should, 4 Nice).
       Proposal-driven shape: ran Phase 0 (extraction map), Phase 1 (4 interview rounds closing 14 gaps).
